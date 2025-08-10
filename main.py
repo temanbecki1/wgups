@@ -140,6 +140,96 @@ def get_distance(from_index, to_index, distance_matrix):
     return 0.0
 
 
+def is_delayed_package(package_id):
+    """
+    Check if a package is delayed on flight.
+    
+    Args:
+        package_id (int): Package ID to check
+        
+    Returns:
+        bool: True if package is delayed
+    """
+    delayed_packages = [6, 25, 28, 32]
+    return package_id in delayed_packages
+
+
+def get_package_address_at_time(package_id, package_data, query_time):
+    """
+    Get the correct package address at a specific time.
+    Handles Package #9 wrong address constraint.
+    
+    Args:
+        package_id (int): Package ID
+        package_data (list): Package data from hash table
+        query_time (datetime.timedelta): Time to check address for
+        
+    Returns:
+        str: Correct address at the given time
+    """
+    if package_id == 9:
+        time_1020 = datetime.timedelta(hours=10, minutes=20)
+        if query_time < time_1020:
+            # Wrong address before 10:20 AM
+            return "300 State St"
+        else:
+            # Correct address after 10:20 AM
+            return "410 S State St"
+    return package_data[0]
+
+
+def get_package_status_at_time(package_id, package_data, query_time):
+    """
+    Get package status at a specific time, accounting for special constraints.
+    
+    Args:
+        package_id (int): Package ID
+        package_data (list): Package data from hash table
+        query_time (datetime.timedelta): Time to check status for
+        
+    Returns:
+        str: Package status at the given time
+    """
+    # Check if package is delayed on flight
+    if is_delayed_package(package_id):
+        delayed_until = datetime.timedelta(hours=9, minutes=5)
+        if query_time < delayed_until:
+            return "Delayed on flight"
+    
+    departure_time = package_data[6] if package_data[6] else datetime.timedelta(hours=8)
+    delivery_time = package_data[7] if package_data[7] else datetime.timedelta(hours=17)
+    
+    if query_time < departure_time:
+        return "At the hub"
+    elif departure_time <= query_time < delivery_time:
+        return "En route"
+    else:
+        return f"Delivered at {delivery_time}"
+
+
+
+
+
+def get_package_truck_number(package_id, truck1, truck2, truck3):
+    """
+    Get the truck number that a package is assigned to.
+    
+    Args:
+        package_id (int): Package ID
+        truck1, truck2, truck3 (Truck): Truck objects
+        
+    Returns:
+        int: Truck number (1, 2, or 3)
+    """
+    if package_id in truck1.packages:
+        return 1
+    elif package_id in truck2.packages:
+        return 2
+    elif package_id in truck3.packages:
+        return 3
+    return None
+
+
 def deliver_packages(truck, package_hash_table, distance_matrix, address_list, current_time):
     """
     Implement nearest neighbor algorithm to deliver packages for a single truck.
@@ -177,13 +267,13 @@ def deliver_packages(truck, package_hash_table, distance_matrix, address_list, c
                 # Handle Package #9 constraint (wrong address until 10:20 AM)
                 if package_id == 9:
                     time_1020 = datetime.timedelta(hours=10, minutes=20)
-                    if truck_time >= time_1020:
+                    if truck_time < time_1020:
+                        # Skip package 9 entirely if before 10:20 AM
+                        continue
+                    else:
                         # Update to correct address after 10:20 AM
                         package_data[0] = "410 S State St"
                         package_address = package_data[0]
-                    elif len(truck.packages) > 1:
-                        # Skip package 9 if it's not the last one and before 10:20 AM
-                        continue
                 
                 # Get address index and calculate distance
                 package_index = get_address_index(package_address, address_list)
@@ -243,16 +333,16 @@ if __name__ == "__main__":
     # Manual truck loading based on package constraints
     # Strategy: Early deadlines on Truck 1, special constraints on Truck 2, rest on Truck 3
     
-    # Truck 1: Packages with early deadlines (8:00 AM departure)
-    truck1.packages = [1, 13, 14, 15, 16, 20, 29, 30, 31, 34, 37, 40]
+    # Truck 1: Packages with early deadlines and "must be delivered with" constraints (8:00 AM departure)
+    truck1.packages = [1, 13, 14, 15, 16, 19, 20, 29, 30, 31, 34, 37, 40]
     truck1.departure_time = datetime.timedelta(hours=8, minutes=0)
     
     # Truck 2: "Must be on truck 2" and delayed packages (9:05 AM departure)
-    truck2.packages = [3, 6, 12, 17, 18, 19, 21, 22, 23, 24, 26, 27, 35, 36, 38, 39]
+    truck2.packages = [3, 6, 12, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 32, 35, 36, 38, 39]
     truck2.departure_time = datetime.timedelta(hours=9, minutes=5)
     
     # Truck 3: Remaining packages including wrong address package #9
-    truck3.packages = [2, 4, 5, 7, 8, 9, 10, 11, 25, 28, 32, 33]
+    truck3.packages = [2, 4, 5, 7, 8, 9, 10, 11, 33]
     # Truck 3 departure time will be set after Truck 1 returns
     
     print("Truck loading complete:")
@@ -322,25 +412,23 @@ if __name__ == "__main__":
                     # Get package data from hash table
                     package_data = package_hash_table.lookup(package_id)
                     if package_data:
-                        # Calculate status based on time
-                        departure_time = package_data[6] if package_data[6] else datetime.timedelta(hours=8)
-                        delivery_time = package_data[7] if package_data[7] else datetime.timedelta(hours=17)
+                        # Get status and address at the specified time
+                        status = get_package_status_at_time(package_id, package_data, input_time)
+                        address = get_package_address_at_time(package_id, package_data, input_time)
+                        truck_number = get_package_truck_number(package_id, truck1, truck2, truck3)
+                        delivery_time = package_data[7] if package_data[7] else None
                         
-                        if input_time < departure_time:
-                            status = "At the hub"
-                        elif departure_time <= input_time < delivery_time:
-                            status = "En route"
-                        else:
-                            status = f"Delivered at {delivery_time}"
-                        
-                        # Display package information
+                        # Display package information with all required elements
                         print(f"\n--- Package {package_id} Status ---")
-                        print(f"Address: {package_data[0]}")
-                        print(f"Deadline: {package_data[1]}")
+                        print(f"Package ID: {package_id}")
+                        print(f"Delivery Address: {address}")
+                        print(f"Delivery Deadline: {package_data[1]}")
+                        print(f"Truck Number: {truck_number}")
+                        print(f"Delivery Status: {status}")
+                        print(f"Delivery Time: {delivery_time if delivery_time else 'Not delivered yet'}")
                         print(f"City: {package_data[2]}")
                         print(f"Zip: {package_data[3]}")
                         print(f"Weight: {package_data[4]} kg")
-                        print(f"Status at {time_input}: {status}")
                     else:
                         print("Package not found in system.")
                         
@@ -357,29 +445,25 @@ if __name__ == "__main__":
                     input_time = datetime.timedelta(hours=hour, minutes=minute)
                     
                     print(f"\n--- All Package Status at {time_input} ---")
-                    print(f"{'ID':<4} {'Address':<25} {'Deadline':<10} {'Weight':<8} {'Status':<20}")
-                    print("-" * 75)
+                    print(f"{'ID':<4} {'Address':<25} {'Deadline':<10} {'Truck':<6} {'Status':<18} {'Delivery Time':<15}")
+                    print("-" * 88)
                     
                     for package_id in range(1, 41):
                         package_data = package_hash_table.lookup(package_id)
                         if package_data:
-                            # Calculate status based on time
-                            departure_time = package_data[6] if package_data[6] else datetime.timedelta(hours=8)
-                            delivery_time = package_data[7] if package_data[7] else datetime.timedelta(hours=17)
-                            
-                            if input_time < departure_time:
-                                status = "At the hub"
-                            elif departure_time <= input_time < delivery_time:
-                                status = "En route"
-                            else:
-                                status = f"Delivered at {delivery_time}"
+                            # Get status and address at the specified time
+                            status = get_package_status_at_time(package_id, package_data, input_time)
+                            address = get_package_address_at_time(package_id, package_data, input_time)
+                            truck_number = get_package_truck_number(package_id, truck1, truck2, truck3)
+                            delivery_time = package_data[7] if package_data[7] else None
                             
                             # Truncate address for display
-                            address = package_data[0][:24] if len(package_data[0]) > 24 else package_data[0]
+                            display_address = address[:24] if len(address) > 24 else address
+                            display_delivery_time = str(delivery_time)[:14] if delivery_time else "Not delivered"
                             
-                            print(f"{package_id:<4} {address:<25} {package_data[1]:<10} {package_data[4]:<8} {status:<20}")
+                            print(f"{package_id:<4} {display_address:<25} {package_data[1]:<10} {truck_number:<6} {status:<18} {display_delivery_time:<15}")
                         else:
-                            print(f"{package_id:<4} {'Not found':<25} {'':<10} {'':<8} {'Error':<20}")
+                            print(f"{package_id:<4} {'Not found':<25} {'':<10} {'':<6} {'Error':<18} {'':<15}")
                             
                 except ValueError:
                     print("Invalid input format. Please use HH:MM format for time.")

@@ -77,6 +77,54 @@ def get_distance(from_index, to_index, distance_matrix):
         return distance
     return 0.0
 
+def is_delayed_package(package_id):
+    """Check if a package is delayed on flight."""
+    delayed_packages = [6, 25, 28, 32]
+    return package_id in delayed_packages
+
+def get_package_address_at_time(package_id, package_data, query_time):
+    """Get the correct package address at a specific time."""
+    if package_id == 9:
+        time_1020 = datetime.timedelta(hours=10, minutes=20)
+        if query_time < time_1020:
+            return "300 State St"
+        else:
+            return "410 S State St"
+    return package_data[0]
+
+def get_package_status_at_time(package_id, package_data, query_time):
+    """Get package status at a specific time, accounting for special constraints."""
+    if is_delayed_package(package_id):
+        delayed_until = datetime.timedelta(hours=9, minutes=5)
+        if query_time < delayed_until:
+            return "Delayed on flight"
+    
+    departure_time = package_data[6] if package_data[6] else datetime.timedelta(hours=8)
+    delivery_time = package_data[7] if package_data[7] else datetime.timedelta(hours=17)
+    
+    if query_time < departure_time:
+        return "At the hub"
+    elif departure_time <= query_time < delivery_time:
+        return "En route"
+    else:
+        return f"Delivered at {delivery_time}"
+
+def get_package_truck_number(package_id):
+    """Get the truck number for a specific package."""
+    # Truck assignments
+    truck1_packages = [1, 13, 14, 15, 16, 19, 20, 29, 30, 31, 34, 37, 40]
+    truck2_packages = [3, 6, 12, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 32, 35, 36, 38, 39]
+    truck3_packages = [2, 4, 5, 7, 8, 9, 10, 11, 33]
+    
+    if package_id in truck1_packages:
+        return 1
+    elif package_id in truck2_packages:
+        return 2
+    elif package_id in truck3_packages:
+        return 3
+    else:
+        return 0  # Unknown
+
 def deliver_packages(truck, package_hash_table, distance_matrix, address_list, current_time):
     """Implement nearest neighbor algorithm to deliver packages for a single truck."""
     truck_time = current_time
@@ -102,11 +150,13 @@ def deliver_packages(truck, package_hash_table, distance_matrix, address_list, c
                 # Handle Package #9 constraint
                 if package_id == 9:
                     time_1020 = datetime.timedelta(hours=10, minutes=20)
-                    if truck_time >= time_1020:
+                    if truck_time < time_1020:
+                        # Skip package 9 entirely if before 10:20 AM
+                        continue
+                    else:
+                        # Update to correct address after 10:20 AM
                         package_data[0] = "410 S State St"
                         package_address = package_data[0]
-                    elif len(packages_to_deliver) > 1:
-                        continue
                 
                 package_index = get_address_index(package_address, address_list)
                 distance = get_distance(truck['current_location'], package_index, distance_matrix)
@@ -147,21 +197,21 @@ def initialize_data():
         trucks = [
             {
                 'id': 1,
-                'packages': [1, 13, 14, 15, 16, 20, 29, 30, 31, 34, 37, 40],
+                'packages': [1, 13, 14, 15, 16, 19, 20, 29, 30, 31, 34, 37, 40],
                 'mileage': 0.0,
                 'current_location': 0,
                 'departure_time': datetime.timedelta(hours=8, minutes=0)
             },
             {
                 'id': 2,
-                'packages': [3, 6, 12, 17, 18, 19, 21, 22, 23, 24, 26, 27, 35, 36, 38, 39],
+                'packages': [3, 6, 12, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 32, 35, 36, 38, 39],
                 'mileage': 0.0,
                 'current_location': 0,
                 'departure_time': datetime.timedelta(hours=9, minutes=5)
             },
             {
                 'id': 3,
-                'packages': [2, 4, 5, 7, 8, 9, 10, 11, 25, 28, 32, 33],
+                'packages': [2, 4, 5, 7, 8, 9, 10, 11, 33],
                 'mileage': 0.0,
                 'current_location': 0,
                 'departure_time': None
@@ -221,22 +271,21 @@ def get_package_status_at_time(package_id):
     if not package_data:
         return jsonify({'error': 'Package not found'}), 404
     
-    departure_time = package_data[6] if package_data[6] else datetime.timedelta(hours=8)
-    delivery_time = package_data[7] if package_data[7] else datetime.timedelta(hours=17)
+    # Use the new helper functions
+    status = get_package_status_at_time(package_id, package_data, query_time)
+    address = get_package_address_at_time(package_id, package_data, query_time)
     
-    if query_time < departure_time:
-        status = "At the hub"
-    elif departure_time <= query_time < delivery_time:
-        status = "En route"
-    else:
-        status = f"Delivered at {delivery_time}"
+    # Get truck number using the helper function
+    truck_number = get_package_truck_number(package_id)
     
     return jsonify({
         'id': package_id,
-        'status': status,
-        'query_time': time_str,
-        'departure_time': str(departure_time),
-        'delivery_time': str(delivery_time) if package_data[7] else None
+        'delivery_address': address,
+        'delivery_deadline': package_data[1],
+        'truck_number': truck_number,
+        'delivery_status': status,
+        'delivery_time': str(package_data[7]) if package_data[7] else None,
+        'query_time': time_str
     })
 
 @app.route('/api/packages/status')
@@ -259,15 +308,9 @@ def get_all_packages_status():
     for package_id in range(1, 41):
         package_data = package_hash_table.lookup(package_id)
         if package_data:
-            departure_time = package_data[6] if package_data[6] else datetime.timedelta(hours=8)
-            delivery_time = package_data[7] if package_data[7] else datetime.timedelta(hours=17)
-            
-            if query_time < departure_time:
-                status = "At the hub"
-            elif departure_time <= query_time < delivery_time:
-                status = "En route"
-            else:
-                status = f"Delivered at {delivery_time}"
+            # Use the new helper functions
+            status = get_package_status_at_time(package_id, package_data, query_time)
+            address = get_package_address_at_time(package_id, package_data, query_time)
             
             # Find which truck this package is on
             truck_id = None
@@ -276,17 +319,19 @@ def get_all_packages_status():
                     truck_id = truck['id']
                     break
             
+            departure_time = package_data[6] if package_data[6] else datetime.timedelta(hours=8)
+            delivery_time = package_data[7] if package_data[7] else None
+            
             packages.append({
                 'id': package_id,
-                'address': package_data[0],
-                'deadline': package_data[1],
+                'delivery_address': address,
+                'delivery_deadline': package_data[1],
+                'truck_number': get_package_truck_number(package_id),
+                'delivery_status': status,
+                'delivery_time': str(package_data[7]) if package_data[7] else None,
                 'city': package_data[2],
                 'zip': package_data[3],
-                'weight': package_data[4],
-                'status': status,
-                'truck_id': truck_id,
-                'departure_time': str(departure_time),
-                'delivery_time': str(delivery_time) if package_data[7] else None
+                'weight': package_data[4]
             })
     
     return jsonify({
