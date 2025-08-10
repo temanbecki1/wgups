@@ -59,8 +59,10 @@ const TimeStatusView = () => {
   };
 
   const getStatusColor = (status) => {
+    if (!status) return 'default';
     if (status === 'At the hub') return 'default';
     if (status === 'En route') return 'warning';
+    if (status === 'Delayed on flight') return 'error';
     if (status.includes('Delivered')) return 'success';
     return 'default';
   };
@@ -68,8 +70,8 @@ const TimeStatusView = () => {
   const groupPackagesByTruck = (packages) => {
     const grouped = { 1: [], 2: [], 3: [] };
     packages.forEach(pkg => {
-      if (pkg.truck_id && grouped[pkg.truck_id]) {
-        grouped[pkg.truck_id].push(pkg);
+      if (pkg.truck_number && grouped[pkg.truck_number]) {
+        grouped[pkg.truck_number].push(pkg);
       }
     });
     return grouped;
@@ -177,27 +179,27 @@ const TimeStatusView = () => {
                           <TableCell><strong>Weight</strong></TableCell>
                           <TableCell><strong>Deadline</strong></TableCell>
                           <TableCell><strong>Status</strong></TableCell>
-                          <TableCell><strong>Departure</strong></TableCell>
+                          <TableCell><strong>Delivery Time</strong></TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {packages.map((pkg) => (
                           <TableRow key={pkg.id} hover>
                             <TableCell>{pkg.id}</TableCell>
-                            <TableCell>{pkg.address}</TableCell>
+                            <TableCell>{pkg.delivery_address}</TableCell>
                             <TableCell>{pkg.city}</TableCell>
                             <TableCell>{pkg.zip}</TableCell>
                             <TableCell>{pkg.weight} kg</TableCell>
-                            <TableCell>{pkg.deadline}</TableCell>
+                            <TableCell>{pkg.delivery_deadline}</TableCell>
                             <TableCell>
                               <Chip
-                                label={pkg.status}
-                                color={getStatusColor(pkg.status)}
+                                label={pkg.delivery_status}
+                                color={getStatusColor(pkg.delivery_status)}
                                 size="small"
                                 variant="outlined"
                               />
                             </TableCell>
-                            <TableCell>{pkg.departure_time}</TableCell>
+                            <TableCell>{pkg.delivery_time || 'Not delivered'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -218,19 +220,19 @@ const TimeStatusView = () => {
                 <Grid item xs={12} md={3}>
                   <Typography variant="body2" color="textSecondary">At Hub</Typography>
                   <Typography variant="h5" color="grey.600">
-                    {packagesData.packages.filter(p => p.status === 'At the hub').length}
+                    {packagesData.packages.filter(p => p.delivery_status === 'At the hub').length}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={3}>
-                  <Typography variant="body2" color="textSecondary">En Route</Typography>
+                  <Typography variant="body2" color="textSecondary">En Route / Delayed</Typography>
                   <Typography variant="h5" color="warning.main">
-                    {packagesData.packages.filter(p => p.status === 'En route').length}
+                    {packagesData.packages.filter(p => p.delivery_status === 'En route' || p.delivery_status === 'Delayed on flight').length}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={3}>
                   <Typography variant="body2" color="textSecondary">Delivered</Typography>
                   <Typography variant="h5" color="success.main">
-                    {packagesData.packages.filter(p => p.status.includes('Delivered')).length}
+                    {packagesData.packages.filter(p => p.delivery_status && p.delivery_status.includes('Delivered')).length}
                   </Typography>
                 </Grid>
               </Grid>

@@ -57,8 +57,10 @@ const PackageTracker = () => {
   };
 
   const getStatusColor = (status) => {
+    if (!status) return 'default';
     if (status === 'At the hub') return 'default';
     if (status === 'En route') return 'warning';
+    if (status === 'Delayed on flight') return 'error';
     if (status.includes('Delivered')) return 'success';
     return 'default';
   };
@@ -128,8 +130,8 @@ const PackageTracker = () => {
                   <Typography variant="body1" fontWeight="bold">#{packageData.id}</Typography>
                 </Box>
                 <Box mb={1}>
-                  <Typography variant="body2" color="textSecondary">Address</Typography>
-                  <Typography variant="body1">{packageData.address}</Typography>
+                  <Typography variant="body2" color="textSecondary">Delivery Address (at query time)</Typography>
+                  <Typography variant="body1">{statusData.delivery_address}</Typography>
                 </Box>
                 <Box mb={1}>
                   <Typography variant="body2" color="textSecondary">City</Typography>
@@ -144,8 +146,12 @@ const PackageTracker = () => {
                   <Typography variant="body1">{packageData.weight} kg</Typography>
                 </Box>
                 <Box mb={1}>
-                  <Typography variant="body2" color="textSecondary">Deadline</Typography>
-                  <Typography variant="body1">{packageData.deadline}</Typography>
+                  <Typography variant="body2" color="textSecondary">Delivery Deadline</Typography>
+                  <Typography variant="body1">{statusData.delivery_deadline}</Typography>
+                </Box>
+                <Box mb={1}>
+                  <Typography variant="body2" color="textSecondary">Truck Number</Typography>
+                  <Typography variant="body1">Truck {statusData.truck_number}</Typography>
                 </Box>
               </Grid>
 
@@ -155,15 +161,11 @@ const PackageTracker = () => {
                 </Typography>
                 <Box mb={2}>
                   <Chip
-                    label={statusData.status}
-                    color={getStatusColor(statusData.status)}
+                    label={statusData.delivery_status}
+                    color={getStatusColor(statusData.delivery_status)}
                     size="large"
                     sx={{ fontSize: '1rem', p: 1 }}
                   />
-                </Box>
-                <Box mb={1}>
-                  <Typography variant="body2" color="textSecondary">Departure Time</Typography>
-                  <Typography variant="body1">{statusData.departure_time}</Typography>
                 </Box>
                 {statusData.delivery_time && (
                   <Box mb={1}>

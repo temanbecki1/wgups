@@ -252,7 +252,7 @@ def get_package(package_id):
     })
 
 @app.route('/api/package/<int:package_id>/status')
-def get_package_status_at_time(package_id):
+def get_package_status_api(package_id):
     """Get package status at a specific time."""
     time_str = request.args.get('time')
     if not time_str:

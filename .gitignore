@@ -279,4 +279,6 @@ $RECYCLE.BIN/
 
 # Local configuration files
 config.local.json
-settings.local.json 
+settings.local.json
+package-lock.json
+package.json
